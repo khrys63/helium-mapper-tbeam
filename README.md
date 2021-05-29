@@ -14,9 +14,9 @@ This is a Helium device based on the TTGO T-Beam development platform using the 
 3. Edit include/config.h with your device information.
 - Device EUI from the console in LSB mode.
 - Application EUI from console in LSB mode
-- APplication Key. This key should be in big endian format (or, since it is not really a number but a block of memory, endianness does not really apply). In practice, a key taken from ttnctl can be copied as-is. Anyway its in MSB mode.
+- Application Key. This key should be in big endian format (or, since it is not really a number but a block of memory, endianness does not really apply). In practice, a key taken from ttnctl can be copied as-is. Anyway its in MSB mode.
 
-4. Add the TTN Mapper integration to your Application 
+4. Add Helium Mapper integration to your Application 
 
 For Helium mapper https://mappers.helium.com
 ```C
@@ -80,7 +80,7 @@ function Decoder(bytes, port) {
 }
 ```
 
-5. build and upload on device
+5. Build and upload on device
 
 6. Turn on the device and once a GPS lock is acquired, the device will start sending data to Helium Mapper and Cargo.
 
