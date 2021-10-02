@@ -2,7 +2,7 @@
 
 This is a Helium device based on the TTGO T-Beam development platform using the SSD1306 I2C OLED display. 
 
-> :warning: This code works with TTGO T-Beam Rev T22_V07
+:warning: This code works with TTGO T-Beam Rev T22_V07 :warning:
 
 ## Setup
 
