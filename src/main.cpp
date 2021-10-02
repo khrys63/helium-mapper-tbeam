@@ -4,26 +4,27 @@
 #include <stdint.h>
 #include <TinyGPS++.h>  
 #include "screen.h"
-#include "lmic.h"
+#include <lmic.h>
 #include <hal/hal.h>
 #include "config.h"
-
-TinyGPSPlus gps;                            
-HardwareSerial GPSSerial(1);                
+#include <WiFi.h>
+#include "gps.h"
+             
 int nbloop;
 uint8_t txBuffer[10];
+gps gpsSensor;
+bool goForMapping;
+bool initiedGPS;
 
 void os_getDevEui (u1_t* buf) { memcpy_P(buf, DEVEUI, 8);}
-
 void os_getArtEui (u1_t* buf) { memcpy_P(buf, APPEUI, 8);}
-
 void os_getDevKey (u1_t* buf) { memcpy_P(buf, APPKEY, 16);}
 
 static osjob_t sendjob;
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).
-const unsigned TX_INTERVAL = (1*60);
+const unsigned TX_INTERVAL = (1*25);
 
 // Pin mapping
 const lmic_pinmap lmic_pins = {
@@ -33,61 +34,51 @@ const lmic_pinmap lmic_pins = {
     .dio = {26, 33, 32}  // Pins for the Heltec ESP32 Lora board/ TTGO Lora32 with 3D metal antenna
 };
 
-void buildPacket(TinyGPSPlus tGps, uint8_t txBuffer[10]){
-  uint32_t LatitudeBinary, LongitudeBinary;
-  uint16_t altitudeGps;
-  uint8_t hdopGps;
-  uint8_t satGps;
+void displayInfo(){
+    Serial.print("Latitude  : ");
+    Serial.println(gpsSensor.getLocation().lat(), 5);
+    Serial.print("Longitude : ");
+    Serial.println(gpsSensor.getLocation().lng(), 4);
+    Serial.print("Satellites: ");
+    Serial.println(gpsSensor.getSatellites().value());
+    Serial.print("Altitude  : ");
+    Serial.print(gpsSensor.getAltitude().feet() / 3.2808);
+    Serial.println("M");
+    Serial.print("Time      : ");
+    Serial.print(gpsSensor.getTime().hour());
+    Serial.print(":");
+    Serial.print(gpsSensor.getTime().minute());
+    Serial.print(":");
+    Serial.println(gpsSensor.getTime().second());
+    Serial.print("Loop: ");
+    Serial.println(nbloop);
+    Serial.println("**********************");
 
-  LatitudeBinary = ((tGps.location.lat() + 90) / 180.0) * 16777215;
-  LongitudeBinary = ((tGps.location.lng() + 180) / 360.0) * 16777215;
+    screen_print("Lat : ");
+    char lat[8];  
+    dtostrf(gpsSensor.getLocation().lat(), 6, 2, lat);
+    screen_print(lat);
+    screen_print("\n");
 
-  txBuffer[0] = ( LatitudeBinary >> 16 ) & 0xFF;
-  txBuffer[1] = ( LatitudeBinary >> 8 ) & 0xFF;
-  txBuffer[2] = LatitudeBinary & 0xFF;
+    screen_print("Lng : ");
+    char lng[8];  
+    dtostrf(gpsSensor.getLocation().lng(), 6, 2, lng);
+    screen_print(lng);
+    screen_print("\n");
 
-  txBuffer[3] = ( LongitudeBinary >> 16 ) & 0xFF;
-  txBuffer[4] = ( LongitudeBinary >> 8 ) & 0xFF;
-  txBuffer[5] = LongitudeBinary & 0xFF;
+    screen_print("Alt : ");
+    char alt[8];  
+    dtostrf(gpsSensor.getAltitude().feet() / 3.2808, 6, 2, alt);
+    screen_print(alt);
+    screen_print("\n");
 
-  altitudeGps = tGps.altitude.meters();
-  txBuffer[6] = ( altitudeGps >> 8 ) & 0xFF;
-  txBuffer[7] = altitudeGps & 0xFF;
+    screen_print("Nb sat : ");
+    char sat[8];  
+    dtostrf(gpsSensor.getSatellites().value(), 6, 2, sat);
+    screen_print(sat);
+    screen_print("\n");
 
-  hdopGps = tGps.hdop.value()/10;
-  txBuffer[8] = hdopGps & 0xFF;
-
-  satGps = tGps.satellites.value();
-  txBuffer[9] = satGps & 0xFF;
-}
-
-void encode(){      
-    int previousMillis = millis();
-
-    while((previousMillis + 1000) > millis()){
-        while (GPSSerial.available() ){
-            char data = GPSSerial.read();
-            gps.encode(data);
-        }
-    }
-}
-
-bool checkGpsFix(){
-  encode();
-  if (gps.location.isValid() && 
-      gps.location.age() < 2000 &&
-      gps.hdop.isValid() &&
-      gps.hdop.value() <= 300 &&
-      gps.hdop.age() < 2000 &&
-      gps.altitude.isValid() && 
-      gps.altitude.age() < 2000 ){
-    Serial.println("Valid gps Fix.");
-    return true;
-  } else {
-    Serial.println("No gps Fix.");
-    Serial.println(gps.location.lat());
-    return false;
-  }
+    screen_update();
 }
 
 void do_send(osjob_t* j){
@@ -97,36 +88,36 @@ void do_send(osjob_t* j){
     if (LMIC.opmode & OP_TXRXPEND) {
         Serial.println(F("OP_TXRXPEND, not sending"));
     } else {
-        // Prepare upstream data transmission at the next possible time.
-      if (checkGpsFix()){
-        nbloop++;
+      // Prepare upstream data transmission at the next possible time.
+      // first time, just joining
+      if (!goForMapping){
+        //connecting to network
+        Serial.println("Connecting to network");
+        LMIC_setTxData2(2, txBuffer, sizeof(txBuffer), 1);
+      }else{
+        LMIC_setDrTxpow(DR_SF9,14);
+        if (!initiedGPS){
+          Serial.println(F("Init GPS"));
+          screen_print ("Init GPS....", 0, 40);
+          screen_update();
+          initiedGPS = true;
+          gpsSensor.init();
+        }
+        //mapping active
+        if (gpsSensor.checkGpsFix()){
+          nbloop++;
 
-        Serial.print("Latitude  : ");
-        Serial.println(gps.location.lat(), 5);
-        Serial.print("Longitude : ");
-        Serial.println(gps.location.lng(), 4);
-        Serial.print("Satellites: ");
-        Serial.println(gps.satellites.value());
-        Serial.print("Altitude  : ");
-        Serial.print(gps.altitude.feet() / 3.2808);
-        Serial.println("M");
-        Serial.print("Time      : ");
-        Serial.print(gps.time.hour());
-        Serial.print(":");
-        Serial.print(gps.time.minute());
-        Serial.print(":");
-        Serial.println(gps.time.second());
-        Serial.print("Loot: ");
-        Serial.println(nbloop);
-        Serial.println("**********************");
+          gpsSensor.buildPacket(txBuffer);
+          
+          displayInfo();
+          
+          LMIC_setTxData2(1, txBuffer, sizeof(txBuffer), 0);
 
-        buildPacket(gps, txBuffer);
-        LMIC_setTxData2(1, txBuffer, sizeof(txBuffer), 0);
-
-        Serial.println(F("Sending uplink packet..."));
-      } else {
-        //try again in 3 seconds
-        os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(3), do_send);
+          Serial.println(F("Sending uplink packet..."));
+        } else {
+          //try again in 3 seconds
+          os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(3), do_send);
+        }
       }
     }
     // Next TX is scheduled after TX_COMPLETE event.
@@ -135,14 +126,21 @@ void do_send(osjob_t* j){
 void setup() {
   Serial.begin(9600); //115200);
   delay(2500);
-  GPSSerial.begin(9600, SERIAL_8N1, 12, 15);   //17-TX 18-RX
-  GPSSerial.setTimeout(2);
 
   Serial.println(F("Setup"));
 
-  screen_setup();
-  screen_show_logo();
-  screen_update();
+  //Turn off WiFi and Bluetooth
+  Serial.println(F("Kill Wifi & BT"));
+  WiFi.mode(WIFI_OFF);
+  btStop();
+
+  initiedGPS=false;
+
+  if (screenPresent){
+    screen_setup();
+    screen_show_logo();
+    screen_update();
+  }
   delay(5000);
 
   // LMIC init
@@ -150,7 +148,8 @@ void setup() {
 
   // Reset the MAC state. Session and pending data transfers will be discarded.
   LMIC_reset();
-  LMIC_setClockError(MAX_CLOCK_ERROR * 1 / 100);
+  LMIC_setClockError(MAX_CLOCK_ERROR * 5 / 100);
+  LMIC_setAdrMode(0);
   // Set up the channels used by the Things Network, which corresponds
   // to the defaults of most gateways. Without this, only three base
   // channels from the LoRaWAN specification are used, which certainly
@@ -182,9 +181,10 @@ void setup() {
 
   // Set data rate and transmit power for uplink (note: txpow seems to be ignored by the library)
   //LMIC_setDrTxpow(DR_SF11,14);
-  LMIC_setDrTxpow(DR_SF9,14);
+  LMIC_setDrTxpow(DR_SF12,16);
+  //LMIC_setDrTxpow(DR_SF9,14);
 
-  // Start job
+  // Start GPS job
   do_send(&sendjob); 
 }
 
@@ -193,15 +193,15 @@ void onEvent (ev_t ev) {
     
     Serial.print(os_getTime());
     Serial.print(": ");
-    screen_clear();
             
     switch(ev) {
-           case EV_TXCOMPLETE:
+        case EV_TXCOMPLETE:
             Serial.println(F("EV_TXCOMPLETE (includes waiting for RX windows)"));
 
             if (LMIC.txrxFlags & TXRX_ACK) {
               Serial.println(F("Received ack"));
-              screen_print ("Received ACK.", 0, 20);
+              screen_print ("Received ACK !", 0, 20);
+              screen_update();
             }
 
             if (LMIC.dataLen) {
@@ -211,51 +211,22 @@ void onEvent (ev_t ev) {
               Serial.println();
               Serial.println(LMIC.rssi);
             }
-
-            screen_print("Lat : ");
-            char lat[8];  
-            dtostrf(gps.location.lat(), 6, 2, lat);
-            screen_print(lat);
-            screen_print("\n");
-
-            screen_print("Lng : ");
-            char lng[8];  
-            dtostrf(gps.location.lng(), 6, 2, lng);
-            screen_print(lng);
-            screen_print("\n");
-
-            screen_print("Alt : ");
-            char alt[8];  
-            dtostrf(gps.altitude.feet() / 3.2808, 6, 2, alt);
-            screen_print(alt);
-            screen_print("\n");
-
-            screen_print("Nb sat : ");
-            char sat[8];  
-            dtostrf(gps.satellites.value(), 6, 2, sat);
-            screen_print(sat);
-            screen_print("\n");
-
-            screen_print("Loop : ");
-            char val[8];  
-            dtostrf(nbloop, 6, 2, val);
-            screen_print(val);
-            screen_print("\n");
-
-            screen_update();
             
             os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL), do_send);
 
             break;
         case EV_JOINING:
             Serial.println(F("EV_JOINING: -> Joining..."));
+            screen_clear();
             screen_print( "Joining....",0,0);
             screen_update();
             break;
         case EV_JOINED: {
               Serial.println(F("EV_JOINED"));
-              screen_print( "Joined!", 0,0);
+              screen_clear();
+              screen_print( "Joined !", 0,0);
               screen_update();
+              goForMapping=true;
               // Disable link check validation (automatically enabled
               // during join, but not supported by TTN at this time).
               LMIC_setLinkCheckMode(0);
@@ -271,7 +242,7 @@ void onEvent (ev_t ev) {
         case EV_LINK_ALIVE:
             Serial.println(F("EV_LINK_ALIVE"));
             break;
-         default:
+        default:
             Serial.println(F("Unknown event"));
             break;
     }
