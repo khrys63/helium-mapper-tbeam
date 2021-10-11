@@ -22,35 +22,29 @@ This is a Helium device based on the TTGO T-Beam development platform using the 
 
 For Helium mapper https://mappers.helium.com
 ```C
-function Decoder(bytes, port) {
-    var decodedPayload = {};
+function Decoder(bytes, port) { 
+ var decodedPayload = {};
+ 
+ decodedPayload.latitude = ((bytes[0]<<16)>>>0) + ((bytes[1]<<8)>>>0) + bytes[2];
+ decodedPayload.latitude = (decodedPayload.latitude / 16777215.0 * 180) - 90;
 
-    decodedPayload.Latitude = ((bytes[0]<<16)>>>0) + ((bytes[1]<<8)>>>0) + bytes[2];
-    decodedPayload.Latitude = (decodedPayload.Latitude / 16777215.0 * 180) - 90;
+ decodedPayload.longitude = ((bytes[3]<<16)>>>0) + ((bytes[4]<<8)>>>0) + bytes[5];
+ decodedPayload.longitude = (decodedPayload.longitude / 16777215.0 * 360) - 180;
+ 
+  var altValue = ((bytes[6]<<8)>>>0) + bytes[7];
+  var sign = bytes[6] & (1 << 7);
+  if(sign)
+  {
+      decodedPayload.altitude = 0xFFFF0000 | altValue;
+  }
+  else
+  {
+      decodedPayload.altitude = altValue;
+  }
+  
+ decodedPayload.accuracy= 10;
 
-    decodedPayload.Longitude = ((bytes[3]<<16)>>>0) + ((bytes[4]<<8)>>>0) + bytes[5];
-    decodedPayload.Longitude = (decodedPayload.Longitude / 16777215.0 * 360) - 180;
-
-    var altValue = ((bytes[6]<<8)>>>0) + bytes[7];
-    var sign = bytes[6] & (1 << 7);
-    if(sign){
-        decodedPayload.altitude = 0xFFFF0000 | altValue;
-    } else {
-        decodedPayload.altitude = altValue;
-    }
-
-    decodedPayload.ALARM_status = false;
-    decodedPayload.BatV = 0;
-    decodedPayload.MD = 0;
-    decodedPayload.LON = "OFF";
-    decodedPayload.FW = 0;
-    decodedPayload.Roll = 0;
-    decodedPayload.Pitch = 0;
-    decodedPayload.accuracy= 0;
-    decodedPayload.sats= bytes[9];
-    decodedPayload.hdop = bytes[8] / 10.0;
-
-    return decodedPayload;
+ return decodedPayload;
 }
 ```
 
