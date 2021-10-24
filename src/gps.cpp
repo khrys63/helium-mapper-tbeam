@@ -77,3 +77,7 @@ TinyGPSLocation gps::getLocation(){
 TinyGPSTime gps::getTime(){
     return tGps.time;
 }
+
+void gps::gps_time(char * buffer, uint8_t size) {
+    snprintf(buffer, size, "%02d:%02d:%02d", tGps.time.hour(), tGps.time.minute(), tGps.time.second());
+}

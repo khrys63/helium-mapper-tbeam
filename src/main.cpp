@@ -58,27 +58,38 @@ void displayInfo(){
 
     screen_clear();
     screen_update();
-    screen_print("You are there !",0,0);
 
-    screen_print("Lat : ",0,9);
+    char buffer[20];
+
+    // Message count
+    snprintf(buffer, sizeof(buffer), "#%03d", nbloop);
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+    display->drawString(0, 2, buffer);
+
+    // Hour
+    gpsSensor.gps_time(buffer, sizeof(buffer));
+    display->setTextAlignment(TEXT_ALIGN_CENTER);
+    display->drawString(display->getWidth()/2, 2, buffer);
+
+    // Satellite count
+    display->setTextAlignment(TEXT_ALIGN_RIGHT);
+    display->drawString(display->getWidth() - SATELLITE_IMAGE_WIDTH - 4, 2, itoa(gpsSensor.getSatellites().value(), buffer, 10));
+    display->drawXbm(display->getWidth() - SATELLITE_IMAGE_WIDTH, 0, SATELLITE_IMAGE_WIDTH, SATELLITE_IMAGE_HEIGHT, SATELLITE_IMAGE);
+
+    screen_print("Lat : ",0,21);
     char lat[8];  
     dtostrf(gpsSensor.getLocation().lat(), 6, 2, lat);
-    screen_print(lat, 37,9);
+    screen_print(lat, 37,21);
 
-    screen_print("Lng : ",0,18);
+    screen_print("Lng : ",0,30);
     char lng[8];  
     dtostrf(gpsSensor.getLocation().lng(), 6, 2, lng);
-    screen_print(lng, 34,18);
+    screen_print(lng, 34,30);
 
-    screen_print("Alt : ",0,27);
+    screen_print("Alt : ",0,39);
     char alt[8];  
     dtostrf(gpsSensor.getAltitude().feet() / 3.2808, 6, 2, alt);
-    screen_print(alt, 39,27);
-
-    screen_print("Nb sat : ",0,36);
-    char sat[8];  
-    dtostrf(gpsSensor.getSatellites().value(), 6, 2, sat);
-    screen_print(sat, 34,36);
+    screen_print(alt, 39,39);
 
     screen_update();
 }
@@ -100,7 +111,7 @@ void do_send(osjob_t* j){
         LMIC_setDrTxpow(DR_SF9,14);
         if (!initiedGPS){
           Serial.println(F("Init GPS"));
-          screen_print ("Init GPS....", 0, 40);
+          screen_print ("Init GPS....", 0, 20);
           screen_update();
           initiedGPS = true;
           gpsSensor.init();
@@ -134,7 +145,7 @@ void do_send(osjob_t* j){
 }
 
 void setup() {
-  Serial.begin(9600); //115200);
+  Serial.begin(9600);
   delay(2500);
 
   Serial.println(F("Setup"));
@@ -146,7 +157,7 @@ void setup() {
 
   initiedGPS=false;
   fixedGPS=false;
-
+  nbloop=0;
   screen_setup();
   screen_show_logo();
   screen_update();
@@ -208,7 +219,7 @@ void onEvent (ev_t ev) {
 
             if (LMIC.txrxFlags & TXRX_ACK) {
               Serial.println(F("Received ack"));
-              screen_print ("Received ACK !", 0, 20);
+              screen_print ("Received ACK !", 0, 10);
               screen_update();
             }
 

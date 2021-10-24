@@ -18,6 +18,7 @@ class gps
         TinyGPSInteger getSatellites();
         TinyGPSLocation getLocation();
         TinyGPSTime getTime();
+        void gps_time(char * buffer, uint8_t size);
 
     private:
         uint32_t LatitudeBinary, LongitudeBinary;
