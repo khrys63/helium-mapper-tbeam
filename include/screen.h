@@ -18,15 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "OLEDDisplay.h"
 #include "images.h"
 #include "fonts.h"
-
-// -----------------------------------------------------------------------------
-// OLED
-// -----------------------------------------------------------------------------
-
-#define SSD1306_ADDRESS 0x3C
-#define SCREEN_HEADER_HEIGHT    14
-#define I2C_SDA         21
-#define I2C_SCL         22
+#include "config.h"
 
 SSD1306Wire * display;
 uint8_t _screen_line = SCREEN_HEADER_HEIGHT - 1;

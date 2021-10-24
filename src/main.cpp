@@ -9,6 +9,7 @@
 #include "config.h"
 #include <WiFi.h>
 #include "gps.h"
+#include "credentials.h"
              
 int nbloop;
 uint8_t txBuffer[10];
@@ -150,7 +151,7 @@ void setup() {
     screen_show_logo();
     screen_update();
   }
-  delay(5000);
+  delay(LOGO_DELAY);
 
   // LMIC init
   os_init();

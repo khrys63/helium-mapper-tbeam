@@ -1,9 +1,10 @@
 #include "gps.h"
+#include "config.h"
 
-HardwareSerial GPSSerial(1);
+HardwareSerial GPSSerial(GPS_SERIAL_NUM);
 
 void gps::init(){  
-    GPSSerial.begin(9600, SERIAL_8N1, 12, 15);
+    GPSSerial.begin(GPS_BAUDRATE, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
     GPSSerial.setTimeout(2);
 }
 
