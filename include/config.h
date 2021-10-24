@@ -31,3 +31,11 @@
 #define I2C_SDA         21
 #define I2C_SCL         22
 #define LOGO_DELAY      5000 
+
+// -----------------------------------------------------------------------------
+// AXP192 (Rev1-specific options)
+// -----------------------------------------------------------------------------
+
+#define GPS_POWER_CTRL_CH     3
+#define LORA_POWER_CTRL_CH    2
+#define PMU_IRQ               35

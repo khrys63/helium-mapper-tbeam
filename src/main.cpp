@@ -2,7 +2,6 @@
 * ESP32 GPS VKEL 9600 Bds
 ******************************************/
 #include <stdint.h>
-#include <TinyGPS++.h>  
 #include "screen.h"
 #include <lmic.h>
 #include <hal/hal.h>
@@ -10,13 +9,20 @@
 #include <WiFi.h>
 #include "gps.h"
 #include "credentials.h"
-             
+#include "axp20x.h"
+
+AXP20X_Class axp;
+bool pmu_irq = false;
+String baChStatus = "No charging";
+
 int nbloop;
 uint8_t txBuffer[10];
 gps gpsSensor;
 bool goForMapping;
 bool initiedGPS;
 bool fixedGPS;
+bool ssd1306_found = false;
+bool axp192_found = false;
 
 void os_getDevEui (u1_t* buf) { memcpy_P(buf, DEVEUI, 8);}
 void os_getArtEui (u1_t* buf) { memcpy_P(buf, APPEUI, 8);}
@@ -144,21 +150,110 @@ void do_send(osjob_t* j){
     // Next TX is scheduled after TX_COMPLETE event.
 }
 
+void scanI2Cdevice(void) {
+    byte err, addr;
+    int nDevices = 0;
+    for (addr = 1; addr < 127; addr++) {
+        Wire.beginTransmission(addr);
+        err = Wire.endTransmission();
+        if (err == 0) {
+            Serial.print("I2C device found at address 0x");
+            if (addr < 16){
+                Serial.print("0");
+            }
+            Serial.print(addr, HEX);
+            Serial.println(" !");
+            nDevices++;
+
+            if (addr == SSD1306_ADDRESS) {
+                ssd1306_found = true;
+                Serial.println("ssd1306 display found");
+            }
+            if (addr == AXP192_SLAVE_ADDRESS) {
+                axp192_found = true;
+                Serial.println("axp192 PMU found");
+            }
+        } else if (err == 4) {
+            Serial.print("Unknow error at address 0x");
+            if (addr < 16){
+                Serial.print("0");
+            }
+            Serial.println(addr, HEX);
+        }
+    }
+    if (nDevices == 0){
+        Serial.println("No I2C devices found\n");
+    }else{
+        Serial.println("done\n");
+    }
+}
+
+void axp192Init() {
+    if (axp192_found) {
+        if (!axp.begin(Wire, AXP192_SLAVE_ADDRESS)) {
+            Serial.println("AXP192 Begin PASS");
+        } else {
+            Serial.println("AXP192 Begin FAIL");
+        }
+        // axp.setChgLEDMode(LED_BLINK_4HZ);
+        Serial.printf("DCDC1: %s\n", axp.isDCDC1Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("DCDC2: %s\n", axp.isDCDC2Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("LDO2: %s\n", axp.isLDO2Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("LDO3: %s\n", axp.isLDO3Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("DCDC3: %s\n", axp.isDCDC3Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("Exten: %s\n", axp.isExtenEnable() ? "ENABLE" : "DISABLE");
+        Serial.println("----------------------------------------");
+
+        axp.setPowerOutPut(AXP192_LDO2, AXP202_ON); // LORA radio
+        axp.setPowerOutPut(AXP192_LDO3, AXP202_ON); // GPS main power
+        axp.setPowerOutPut(AXP192_DCDC2, AXP202_ON);
+        axp.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
+        axp.setPowerOutPut(AXP192_DCDC1, AXP202_ON);
+        axp.setDCDC1Voltage(3300); // for the OLED power
+
+        Serial.printf("DCDC1: %s\n", axp.isDCDC1Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("DCDC2: %s\n", axp.isDCDC2Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("LDO2: %s\n", axp.isLDO2Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("LDO3: %s\n", axp.isLDO3Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("DCDC3: %s\n", axp.isDCDC3Enable() ? "ENABLE" : "DISABLE");
+        Serial.printf("Exten: %s\n", axp.isExtenEnable() ? "ENABLE" : "DISABLE");
+
+        pinMode(PMU_IRQ, INPUT_PULLUP);
+        attachInterrupt(PMU_IRQ, [] {
+            pmu_irq = true;
+        }, FALLING);
+
+        axp.adc1Enable(AXP202_BATT_CUR_ADC1, 1);
+        axp.enableIRQ(AXP202_VBUS_REMOVED_IRQ | AXP202_VBUS_CONNECT_IRQ | AXP202_BATT_REMOVED_IRQ | AXP202_BATT_CONNECT_IRQ, 1);
+        axp.clearIRQ();
+
+        if (axp.isChargeing()) {
+            baChStatus = "Charging";
+        }
+    } else {
+        Serial.println("AXP192 not found");
+    }
+}
+
 void setup() {
   Serial.begin(9600);
   delay(2500);
 
   Serial.println(F("Setup"));
 
+  initiedGPS=false;
+  fixedGPS=false;
+  nbloop=0;
+
   //Turn off WiFi and Bluetooth
   Serial.println(F("Kill Wifi & BT"));
   WiFi.mode(WIFI_OFF);
   btStop();
 
-  initiedGPS=false;
-  fixedGPS=false;
-  nbloop=0;
-  screen_setup();
+  scanI2Cdevice();
+  axp192Init();
+
+  if (ssd1306_found) screen_setup();
   screen_show_logo();
   screen_update();
   delay(LOGO_DELAY);
@@ -237,13 +332,13 @@ void onEvent (ev_t ev) {
         case EV_JOINING:
             Serial.println(F("EV_JOINING: -> Joining..."));
             screen_clear();
-            screen_print( "Joining....",0,0);
+            screen_print( "Joining Helium ...",0,0);
             screen_update();
             break;
         case EV_JOINED: {
               Serial.println(F("EV_JOINED"));
               screen_clear();
-              screen_print( "Joined !", 0,0);
+              screen_print( "Joined Helium !", 0,0);
               screen_update();
               goForMapping=true;
               // Disable link check validation (automatically enabled
