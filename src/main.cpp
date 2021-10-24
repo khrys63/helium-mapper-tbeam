@@ -146,11 +146,10 @@ void setup() {
 
   initiedGPS=false;
   fixedGPS=false;
-  if (screenPresent){
-    screen_setup();
-    screen_show_logo();
-    screen_update();
-  }
+
+  screen_setup();
+  screen_show_logo();
+  screen_update();
   delay(LOGO_DELAY);
 
   // LMIC init

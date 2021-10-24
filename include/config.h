@@ -26,8 +26,6 @@
 // OLED
 // -----------------------------------------------------------------------------
 
-static const bool screenPresent = true;
-
 #define SSD1306_ADDRESS 0x3C
 #define SCREEN_HEADER_HEIGHT    14
 #define I2C_SDA         21
