@@ -55,11 +55,8 @@ bool gps::checkGpsFix(){
         tGps.hdop.age() < 2000 &&
         tGps.altitude.isValid() && 
         tGps.altitude.age() < 2000 ){
-        Serial.println("Valid gps Fix.");
         return true;
     } else {
-        Serial.println("No gps Fix.");
-        Serial.println(tGps.location.lat());
         return false;
     }
 }

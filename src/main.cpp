@@ -15,6 +15,7 @@ uint8_t txBuffer[10];
 gps gpsSensor;
 bool goForMapping;
 bool initiedGPS;
+bool fixedGPS;
 
 void os_getDevEui (u1_t* buf) { memcpy_P(buf, DEVEUI, 8);}
 void os_getArtEui (u1_t* buf) { memcpy_P(buf, APPEUI, 8);}
@@ -54,29 +55,29 @@ void displayInfo(){
     Serial.println(nbloop);
     Serial.println("**********************");
 
-    screen_print("Lat : ");
+    screen_clear();
+    screen_update();
+    screen_print("You are there !",0,0);
+
+    screen_print("Lat : ",0,9);
     char lat[8];  
     dtostrf(gpsSensor.getLocation().lat(), 6, 2, lat);
-    screen_print(lat);
-    screen_print("\n");
+    screen_print(lat, 37,9);
 
-    screen_print("Lng : ");
+    screen_print("Lng : ",0,18);
     char lng[8];  
     dtostrf(gpsSensor.getLocation().lng(), 6, 2, lng);
-    screen_print(lng);
-    screen_print("\n");
+    screen_print(lng, 34,18);
 
-    screen_print("Alt : ");
+    screen_print("Alt : ",0,27);
     char alt[8];  
     dtostrf(gpsSensor.getAltitude().feet() / 3.2808, 6, 2, alt);
-    screen_print(alt);
-    screen_print("\n");
+    screen_print(alt, 39,27);
 
-    screen_print("Nb sat : ");
+    screen_print("Nb sat : ",0,36);
     char sat[8];  
     dtostrf(gpsSensor.getSatellites().value(), 6, 2, sat);
-    screen_print(sat);
-    screen_print("\n");
+    screen_print(sat, 34,36);
 
     screen_update();
 }
@@ -105,6 +106,7 @@ void do_send(osjob_t* j){
         }
         //mapping active
         if (gpsSensor.checkGpsFix()){
+          fixedGPS=true;
           nbloop++;
 
           gpsSensor.buildPacket(txBuffer);
@@ -115,6 +117,13 @@ void do_send(osjob_t* j){
 
           Serial.println(F("Sending uplink packet..."));
         } else {
+          Serial.println("No gps Fix.");
+          if (fixedGPS){
+            screen_clear();
+            screen_update();
+            screen_print("GPS Lost !",0,0);
+            screen_update();
+          }
           //try again in 3 seconds
           os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(3), do_send);
         }
@@ -135,7 +144,7 @@ void setup() {
   btStop();
 
   initiedGPS=false;
-
+  fixedGPS=false;
   if (screenPresent){
     screen_setup();
     screen_show_logo();
@@ -184,13 +193,12 @@ void setup() {
   LMIC_setDrTxpow(DR_SF12,16);
   //LMIC_setDrTxpow(DR_SF9,14);
 
+  goForMapping = false;
   // Start GPS job
   do_send(&sendjob); 
 }
 
 void onEvent (ev_t ev) {
-    Serial.println(F("onEvent"));
-    
     Serial.print(os_getTime());
     Serial.print(": ");
             
